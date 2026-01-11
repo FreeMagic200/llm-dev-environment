@@ -1,0 +1,69 @@
+services:
+  rag-dev:
+    image: llm-dev:v1.2
+    container_name: rag-dev-platform
+
+    # 1. GPU Core Configuration
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all  # Use all available GPUs, or set to 1, 2, etc.
+              capabilities: [gpu]
+
+    # 2. Performance Optimization: Shared Memory (Critical)
+    # vLLM and PyTorch distributed communication require large shared memory
+    # Default 64MB will cause crashes
+    shm_size: '18gb'
+
+    # 3. Port Mapping
+    ports:
+      - "2222:22"    # SSH access (host 2222 -> container 22)
+      - "8888:8888"  # Jupyter Lab
+      - "8026:8000"  # vLLM OpenAI API service
+      - "8501:8501"  # Reserved for Streamlit and other frontend demos
+
+    # 4. Persistent Volume Mounts (Store data outside the 33GB image)
+    volumes:
+      # Code and project files
+      - /mnt/shared_data_4t/projects:/home/ubuntu/workspace
+
+      # Model weights mount (Highly recommended: mount host model path to avoid storing models in image)
+      - /mnt/shared_data_4t/projects/llm/models/huggingface:/home/ubuntu/model_cache/huggingface
+
+      # Fast development: Persist VS Code server
+      # Even if container is destroyed, VS Code extensions won't need reinstallation
+      - vscode_server_cache:/home/ubuntu/.vscode-server
+
+      # SSH public key for passwordless login (Optional: mount host public key to container)
+      - ~/.ssh/id_rsa.pub:/home/ubuntu/.ssh/authorized_keys:ro
+
+    # 5. Environment Variables
+    environment:
+      - TZ=Asia/Shanghai
+      - HF_ENDPOINT=https://hf-mirror.com
+      - CUDA_VISIBLE_DEVICES=all
+      # Limit vLLM GPU memory utilization to prevent OOM (adjust based on GPU memory size)
+      - VLLM_GPU_MEMORY_UTILIZATION=0.8
+
+    # 6. Runtime Strategy
+    stdin_open: true  # Keep interactive mode (equivalent to -i)
+    tty: true        # Allocate pseudo-TTY (equivalent to -t)
+    restart: unless-stopped
+
+    # 7. Resource Limits (Prevent CPU saturation by RAG preprocessing tasks)
+    # cpuset: "0-15"  # Bind to specific CPU cores
+
+    # 8. Network Configuration (Join external network)
+    networks:
+      - ragflow
+
+# Define named volumes (persistent data)
+volumes:
+  vscode_server_cache:
+
+# Define networks (declare external network)
+networks:
+  ragflow:
+    external: true
