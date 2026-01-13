@@ -2,12 +2,17 @@
 # ↑↑↑ Must keep this line to support BuildKit
 
 # ==============================================================================
-# 🌟 LLM Full-Stack Development Environment v1.2 (Stable Build Edition)
+# 🌟 LLM Full-Stack Development Environment v1.3 (Lightweight Edition)
 # ==============================================================================
 # [ Fix History / Fixes ]
 #   1. Fixed Dev env build failure: Explicitly lock torch==2.4.0 to prevent sentence-transformers from pulling wrong versions
 #   2. Fixed network timeout: Increased UV_HTTP_TIMEOUT=600 to prevent large file download interruptions
 #   3. Maintained China mirrors: Full configuration with Tsinghua source + HF Mirror
+#   4. v1.3 Lightweight optimization:
+#      - Removed heavy OCR tools (magic-pdf, docling, unstructured)
+#      - Merged lightweight doc tools into dev environment (pymupdf, python-docx, etc.)
+#      - Added graph tools (networkx, neo4j) for knowledge graph workflows
+#      - Removed system dependencies (tesseract-ocr, libreoffice) to reduce image size
 # ==============================================================================
 
 # -------------------------------------------------------------
@@ -43,7 +48,7 @@ RUN uv pip install --no-cache \
     torch==2.4.0 torchvision==0.19.0 torchaudio==2.4.0 \
     --index-url https://download.pytorch.org/whl/cu124
 
-# 2. Dev Environment (Application Layer)
+# 2. Dev Environment (Application Layer + Lightweight Doc Tools + Graph Tools)
 # [Critical Fix] Explicitly install torch==2.4.0. Without this, sentence-transformers will try to
 # upgrade torch to latest version (like 2.5+ or wrong ghost version), causing large file re-download and timeout.
 RUN uv venv /opt/venv/dev --python 3.11 && \
@@ -57,7 +62,12 @@ RUN uv venv /opt/venv/dev --python 3.11 && \
     llama-index llama-index-llms-openai llama-index-embeddings-huggingface \
     sentence-transformers transformers "huggingface_hub[cli]" \
     chromadb qdrant-client pymilvus \
-    jupyterlab ipywidgets httpx tenacity pydantic
+    jupyterlab ipywidgets httpx tenacity pydantic \
+    # >>> Lightweight document processing tools <<<
+    pymupdf python-docx pdfplumber markitdown tiktoken \
+    pandas openpyxl xlrd \
+    # >>> Graph tools <<<
+    networkx neo4j
 
 # 3. Inference Environment (High-Performance Inference)
 # Inject PYTHONPATH to let setup.py find Base's torch
@@ -71,20 +81,12 @@ RUN uv venv /opt/venv/inference --python 3.11 && \
     # Compile Flash Attention (this step still pulls source from GitHub, slow, please be patient)
     uv pip install --no-cache flash-attn --no-build-isolation
 
-# 4. Doc Tools Environment
-RUN uv venv /opt/venv/doc_tools --python 3.11 && \
-    . /opt/venv/doc_tools/bin/activate && \
-    uv pip install --no-cache \
-    "magic-pdf[full]" docling "unstructured[pdf,docx,pptx,xlsx]" \
-    pdfplumber pymupdf python-docx markitdown tiktoken \
-    pandas openpyxl xlrd
-
 # -------------------------------------------------------------
 # Stage 2: Runtime (Runtime Image)
 # -------------------------------------------------------------
 FROM nvidia/cuda:12.4.1-runtime-ubuntu22.04
 
-LABEL version="v1.2" maintainer="Gemini"
+LABEL version="v1.3" maintainer="Gemini"
 
 # [Build Argument] Customizable user password
 ARG USER_PASSWORD=ubuntu
@@ -106,14 +108,13 @@ ENV DEBIAN_FRONTEND=noninteractive \
 RUN sed -i 's/archive.ubuntu.com/mirrors.aliyun.com/g' /etc/apt/sources.list && \
     sed -i 's/security.ubuntu.com/mirrors.aliyun.com/g' /etc/apt/sources.list
 
-# 1. Install system dependencies
+# 1. Install system dependencies (Lightweight: Removed tesseract-ocr, libreoffice)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     git git-lfs curl wget zsh tmux vim nano sudo ca-certificates \
     openssh-server iputils-ping net-tools htop nvtop \
     python3.11 python3.11-venv \
     libgl1-mesa-glx libglib2.0-0 ffmpeg libsndfile1 \
-    tesseract-ocr tesseract-ocr-chi-sim tesseract-ocr-eng \
-    libreoffice-writer libreoffice-calc libreoffice-impress poppler-utils libmagic1 \
+    poppler-utils libmagic1 \
     fonts-powerline fonts-noto-cjk \
     && curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
     && apt-get install -y nodejs \
@@ -234,19 +235,13 @@ export PIP_INDEX_URL="https://pypi.tuna.tsinghua.edu.cn/simple"
 use_dev() {
     deactivate 2>/dev/null; source /opt/venv/dev/bin/activate
     export PYTHONPATH="/opt/venv/base/lib/python3.11/site-packages:$PYTHONPATH"
-    echo "🚀 Switched to: DEV (Agent/RAG)"
+    echo "🚀 Switched to: DEV (Agent/RAG + Docs + Graph)"
 }
 
 use_inference() {
     deactivate 2>/dev/null; source /opt/venv/inference/bin/activate
     export PYTHONPATH="/opt/venv/base/lib/python3.11/site-packages:$PYTHONPATH"
     echo "🚀 Switched to: INFERENCE (vLLM + FlashAttn)"
-}
-
-use_docs() {
-    deactivate 2>/dev/null; source /opt/venv/doc_tools/bin/activate
-    export PYTHONPATH="/opt/venv/base/lib/python3.11/site-packages:$PYTHONPATH"
-    echo "🚀 Switched to: DOC_TOOLS (Parsing)"
 }
 
 alias jlab='jupyter lab --ip=0.0.0.0 --no-browser --ServerApp.token="" --ServerApp.password=""'

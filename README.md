@@ -1,10 +1,13 @@
 # 🌟 LLM Full-Stack Development Environment
 
-A production-ready Docker development environment for Large Language Model (LLM) applications, featuring GPU acceleration, multi-environment support, and optimized for RAG, Agent, and Inference workflows.
+A production-ready **lightweight** Docker development environment for Large Language Model (LLM) applications, featuring GPU acceleration, multi-environment support, and optimized for RAG, Agent, Knowledge Graph, and Inference workflows.
+
+**Version: v1.3 (Lightweight Edition)** - Reduced image size by removing heavy OCR tools while maintaining essential document processing capabilities.
 
 ## 📋 Table of Contents
 
 - [Features](#-features)
+- [What's New in v1.3](#-whats-new-in-v13)
 - [Quick Start](#-quick-start)
 - [Architecture](#-architecture)
 - [Usage](#-usage)
@@ -15,9 +18,11 @@ A production-ready Docker development environment for Large Language Model (LLM)
 
 ### 🚀 Multi-Environment Support
 - **Base**: PyTorch 2.4.0 + CUDA 12.4 foundation
-- **Dev**: Agent/RAG development (LangChain, LlamaIndex, ChromaDB, etc.)
+- **Dev**: Agent/RAG development + lightweight document processing + graph tools
+  - AI Frameworks: LangChain, LlamaIndex, ChromaDB, Qdrant, Milvus
+  - Document Processing: PyMuPDF, PDFPlumber, python-docx, Markitdown
+  - Graph Tools: NetworkX, Neo4j driver
 - **Inference**: High-performance inference (vLLM, Flash Attention, LMDeploy)
-- **Doc Tools**: Document processing (Magic-PDF, Docling, Unstructured)
 
 ### 🔧 Developer Experience
 - **Zsh + Oh My Zsh**: Beautiful terminal with Agnoster theme
@@ -26,10 +31,51 @@ A production-ready Docker development environment for Large Language Model (LLM)
 - **VS Code Remote**: Persistent server configuration
 
 ### 🎯 Optimizations
+- **Lightweight Design**: Removed heavy OCR tools (saved ~2-3GB)
+- **Consolidated Environment**: Merged document tools into dev environment for seamless workflow
 - **China Mirror Support**: Tsinghua PyPI, Aliyun APT, HuggingFace Mirror
-- **Multi-Stage Build**: Optimized image size
+- **Multi-Stage Build**: Optimized image size (~30-31GB)
 - **Persistent Volumes**: Model cache, workspace, and extensions
 - **Custom Password**: Build-time configurable user password
+
+## 🆕 What's New in v1.3
+
+### Lightweight Design Philosophy
+v1.3 focuses on reducing image size while maintaining essential functionality for RAG, Agent, and Knowledge Graph workflows.
+
+### Key Changes
+
+**✅ Added:**
+- 🕸️ **Graph Tools**: NetworkX for graph algorithms, Neo4j driver for graph database integration
+- 📦 **Consolidated Environment**: Lightweight document tools now integrated into dev environment for seamless workflow
+
+**❌ Removed:**
+- Heavy OCR tools: `magic-pdf`, `docling`, `unstructured[full]` (~2-3GB saved)
+- System dependencies: `tesseract-ocr` and language packs (~200MB saved)
+- Office tools: `libreoffice-writer`, `libreoffice-calc`, `libreoffice-impress` (~500MB saved)
+- Separate `doc_tools` environment
+
+**🔧 Simplified:**
+- Two environments instead of three: `dev` (includes doc tools + graph tools) + `inference`
+- Faster environment switching - no need to switch for document processing
+- Single `use_dev()` command for all RAG/Agent/Graph workflows
+
+### Migration from v1.2
+
+If you're upgrading from v1.2:
+
+```bash
+# Remove old image
+docker rmi llm-dev:v1.2
+
+# Build new v1.3 image
+./build.sh
+
+# Update docker-compose.yml (already updated if you pulled latest)
+docker-compose up -d
+```
+
+**Note:** The `use_docs()` command has been removed. All document processing tools are now available in the default `dev` environment.
 
 ## 🚀 Quick Start
 
@@ -43,11 +89,15 @@ A production-ready Docker development environment for Large Language Model (LLM)
 ### 1. Build the Image
 
 ```bash
-# Build with default password (ubuntu)
-sudo docker build -t llm-dev:v1.2 .
+# Build with default password (ubuntu) - Recommended
+./build.sh
 
 # Build with custom password
-sudo docker build --build-arg "USER_PASSWORD=your_secure_password" -t llm-dev:v1.2 .
+./build.sh your_secure_password
+
+# Or build manually
+sudo docker build -t llm-dev:v1.3 .
+sudo docker build --build-arg "USER_PASSWORD=your_secure_password" -t llm-dev:v1.3 .
 ```
 
 ### 2. Create External Network
@@ -82,22 +132,18 @@ http://localhost:8888
 ```
 /opt/venv/
 ├── base/           # PyTorch foundation (shared by all envs)
-├── dev/            # Development environment (default)
-├── inference/      # High-performance inference
-└── doc_tools/      # Document processing
+├── dev/            # Development environment (default) - includes doc tools & graph tools
+└── inference/      # High-performance inference
 ```
 
 ### Switch Between Environments
 
 ```bash
-# Switch to Dev environment (default)
+# Switch to Dev environment (default) - includes everything for RAG/Agent/Graph
 use_dev
 
-# Switch to Inference environment
+# Switch to Inference environment - for vLLM/LMDeploy
 use_inference
-
-# Switch to Doc Tools environment
-use_docs
 ```
 
 ## 💻 Usage
@@ -142,6 +188,43 @@ hf-down Qwen/Qwen2.5-7B-Instruct
 
 # Or manually
 huggingface-cli download --resume-download Qwen/Qwen2.5-7B-Instruct
+```
+
+### Document Processing (All in Dev Environment)
+
+```python
+# No need to switch environments - all tools available in dev!
+
+# PDF processing with PyMuPDF
+import fitz  # pymupdf
+doc = fitz.open("document.pdf")
+text = doc[0].get_text()
+
+# Word document processing
+from docx import Document
+doc = Document("document.docx")
+
+# Excel processing
+import pandas as pd
+df = pd.read_excel("data.xlsx")
+```
+
+### Knowledge Graph Development
+
+```python
+# NetworkX for graph algorithms
+import networkx as nx
+G = nx.Graph()
+G.add_edges_from([('A', 'B'), ('B', 'C'), ('C', 'A')])
+
+# Neo4j integration
+from neo4j import GraphDatabase
+driver = GraphDatabase.driver("bolt://localhost:7687", auth=("neo4j", "password"))
+
+# Build knowledge graphs from documents
+import tiktoken
+tokenizer = tiktoken.get_encoding("cl100k_base")
+tokens = tokenizer.encode("Your text here")
 ```
 
 ## ⚙️ Configuration
@@ -256,12 +339,17 @@ export HF_ENDPOINT=https://hf-mirror.com
 - Qdrant
 - Milvus
 
-### Document Processing
-- Magic-PDF
-- Docling
-- Unstructured
-- PDFPlumber
+### Document Processing (Lightweight)
 - PyMuPDF
+- PDFPlumber
+- python-docx
+- Markitdown
+- pandas, openpyxl, xlrd
+- tiktoken
+
+### Graph Tools
+- NetworkX (graph algorithms)
+- Neo4j (graph database driver)
 
 ### Development Tools
 - JupyterLab

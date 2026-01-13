@@ -5,8 +5,8 @@
 
 USER_PASSWORD="${1:-ubuntu}"
 
-echo "Building llm-dev:v1.2 with custom password..."
-sudo docker build --build-arg "USER_PASSWORD=${USER_PASSWORD}" -t llm-dev:v1.2 .
+echo "Building llm-dev:v1.3 (Lightweight Edition) with custom password..."
+sudo docker build --build-arg "USER_PASSWORD=${USER_PASSWORD}" -t llm-dev:v1.3 .
 
 echo ""
 echo "Build complete! Start with:"

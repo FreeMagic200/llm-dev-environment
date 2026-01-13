@@ -1,6 +1,6 @@
 services:
   rag-dev:
-    image: llm-dev:v1.2
+    image: llm-dev:v1.3
     container_name: rag-dev-platform
 
     # 1. GPU Core Configuration
